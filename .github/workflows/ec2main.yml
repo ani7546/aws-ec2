@@ -1,24 +1,39 @@
-name: Deploy to EC2
+name: Deploy PHP files to EC2
 
 on:
   push:
     branches:
-      - main
+      - main  # Trigger the action on push to the main branch
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # The OS on which the action runs
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@main
+      # Step 1: Checkout the repository's code
+      - name: Checkout code
+        uses: actions/checkout@v3  # Use the latest stable version of the checkout action
 
-    - name: Deploy to EC2
-      env:
-        EC2_HOST: ${{ secrets.EC2_HOST }}
-        EC2_USER: ubuntu
-        KEY: ${{ secrets.EC2_KEY }}
-      run: |
-        echo "$KEY" > private_key.pem
-        chmod 600 private_key.pem
-        rsync -avz -e "ssh -i private_key.pem" --delete ./index.php $EC2_USER@$EC2_HOST:/var/www/html/
+      # Step 2: List files in the repository (for debugging purposes)
+      - name: List files in the repository
+        run: ls -al
+
+      # Step 3: Set up SSH to connect to EC2
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}  # Add the SSH private key to GitHub secrets
+
+      # Step 4: Deploy index.php to EC2 instance
+      - name: Deploy PHP files to EC2
+        run: |
+          # Ensure the remote directory exists and has the correct ownership
+          ssh -o StrictHostKeyChecking=no ubuntu@13.127.184.113 "sudo mkdir -p /var/www/html && sudo chown ubuntu:ubuntu /var/www/html"
+          
+          # Deploy index.php files to the EC2 server
+          rsync -avz --exclude='.git*' --exclude='node_modules' --delete ./index.php ubuntu@13.127.184.113:/var/www/html/
+         
+      # Step 5: Restart Apache to apply the changes
+      - name: Restart Apache
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@13.127.184.113 "sudo systemctl restart apache2"
